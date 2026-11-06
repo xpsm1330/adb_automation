@@ -1,41 +1,50 @@
+from pathlib import Path
+
 from core.adb import AdbDevice
-from core.utils import create_evidence_dir
-evidence_dir = create_evidence_dir("before")
-from scenarios.collect_users import collect_users
+from core.utils import create_evidence_dir, load_devices
+from scenarios.collect_build_info import collect_build_info
 from scenarios.collect_connection_scope import collect_connection_scope
 from scenarios.collect_environment import collect_environment
-from core.utils import AdbHelper, load_devices
-from scenarios.start_logcat import start_logcat
-adb = AdbHelper()
-devices = load_devices()
-HU = devices["hu"]["serial"]
-PHONE = devices["phone"]["serial"]
+from scenarios.collect_users import collect_users
+from scenarios.start_logcat import start_logcat, stop_logcat
 
-AdbDevice.verify_device(HU)
-device = AdbDevice("HU")
 
-print(f"HU={HU}")
-print(f"PHONE={PHONE}")
+def main():
+    evidence_dir = create_evidence_dir("before")
+    devices = load_devices()
+    hu_serial = devices["hu"]["serial"]
+    phone_serial = devices["phone"]["serial"]
 
-result = adb.shell(HU, "getprop ro.build.id")
-print(f"Build ID: {result}")
+    AdbDevice.verify_device(hu_serial)
+    AdbDevice.verify_device(phone_serial)
 
-start_logcat(HU,PHONE)
+    hu_device = AdbDevice(hu_serial)
+    print(f"HU={hu_serial}")
+    print(f"PHONE={phone_serial}")
 
-collect_environment(
-    adb=adb,
-    hu_serial=HU,
-    phone_serial=PHONE,
-    output_dir=(f'{evidence_dir}/env_setup')
-)
+    loggers = start_logcat(hu_serial, phone_serial)
+    try:
+        collect_build_info(hu_device, evidence_dir / "build_info")
+        collect_environment(
+            adb=__import__("core.utils", fromlist=["AdbHelper"]).AdbHelper(),
+            hu_serial=hu_serial,
+            phone_serial=phone_serial,
+            output_dir=evidence_dir / "env_setup",
+        )
+        collect_users(hu_device, evidence_dir / "users")
+        collect_connection_scope(
+            device=hu_device,
+            output_dir=evidence_dir / "connection_scope",
+            phase="before",
+        )
 
-collect_users(
-    device=device,
-    output_dir=evidence_dir / "users"
-)
+        input("Collection complete. Press Enter or Ctrl+C to stop logcat... ")
+    except KeyboardInterrupt:
+        print("\n[INFO] Stop requested")
+    finally:
+        stop_logcat(loggers)
+        print(f"[INFO] Evidence saved to {evidence_dir}")
 
-collect_connection_scope(
-    device=device,
-    output_dir=evidence_dir / "connection_scope",
-    phase="before"
-)
+
+if __name__ == "__main__":
+    main()
