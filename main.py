@@ -1,7 +1,5 @@
-from pathlib import Path
-
 from core.adb import AdbDevice
-from core.utils import create_evidence_dir, load_devices
+from core.utils import AdbHelper, create_evidence_dir, load_devices
 from scenarios.collect_build_info import collect_build_info
 from scenarios.collect_connection_scope import collect_connection_scope
 from scenarios.collect_environment import collect_environment
@@ -19,6 +17,7 @@ def main():
     AdbDevice.verify_device(phone_serial)
 
     hu_device = AdbDevice(hu_serial)
+    adb = AdbHelper()
     print(f"HU={hu_serial}")
     print(f"PHONE={phone_serial}")
 
@@ -26,7 +25,7 @@ def main():
     try:
         collect_build_info(hu_device, evidence_dir / "build_info")
         collect_environment(
-            adb=__import__("core.utils", fromlist=["AdbHelper"]).AdbHelper(),
+            adb=adb,
             hu_serial=hu_serial,
             phone_serial=phone_serial,
             output_dir=evidence_dir / "env_setup",

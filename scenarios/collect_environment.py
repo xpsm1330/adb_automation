@@ -1,155 +1,62 @@
-# scenarios/collect_environment.py
-
 from pathlib import Path
-
-def adb_query():
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    hu_commands = [
-            "getprop ro.build.id",
-            "getprop ro.build.display.id",
-            "getprop ro.build.version.incremental",
-            "getprop ro.build.fingerprint"
-        ]
-    
-    hu_file = out / "hu_configuration.txt"
-
-    with open(hu_file, "w", encoding="utf-8") as f:
-        f.write("=== HU CONFIGURATION ===\n\n")
-
-        for cmd in hu_commands:
-            f.write(f"$ {cmd}\n")
-            f.write(adb.shell(hu_serial, cmd))
-            f.write("\n\n")
-
-    print(f"[INFO] {hu_file.name}")
 
 
 def collect_environment(adb, hu_serial, phone_serial, output_dir="evidence"):
-    """
-    Collects:
-    - HU configuration
-    - Phone configuration
-    - User/profile information
-    - DCSM status
-    - Test start timestamp
-    """
-
+    """Collect basic HU, phone, user, DCSM, and timestamp evidence."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-
     print("[INFO] Collecting environment information...")
 
-    # ============================================================
-    # HU CONFIGURATION
-    # ============================================================
+    sections = {
+        "hu_configuration.txt": (
+            "=== HU CONFIGURATION ===",
+            hu_serial,
+            [
+                "getprop ro.build.id",
+                "getprop ro.build.display.id",
+                "getprop ro.build.version.incremental",
+                "getprop ro.build.fingerprint",
+            ],
+        ),
+        "phone_configuration.txt": (
+            "=== PHONE CONFIGURATION ===",
+            phone_serial,
+            [
+                "getprop ro.product.manufacturer",
+                "getprop ro.product.model",
+                "getprop ro.build.version.release",
+                "getprop ro.build.version.sdk",
+                "getprop ro.build.fingerprint",
+            ],
+        ),
+    }
 
-    hu_commands = [
-        "getprop ro.build.id",
-        "getprop ro.build.display.id",
-        "getprop ro.build.version.incremental",
-        "getprop ro.build.fingerprint"
-    ]
+    for filename, (title, serial, commands) in sections.items():
+        with (out / filename).open("w", encoding="utf-8") as file:
+            file.write(f"{title}\n\n")
+            for command in commands:
+                file.write(f"$ {command}\n")
+                file.write(adb.shell(serial, command))
+                file.write("\n\n")
+        print(f"[INFO] {filename}")
 
-    hu_file = out / "hu_configuration.txt"
-
-    with open(hu_file, "w", encoding="utf-8") as f:
-        f.write("=== HU CONFIGURATION ===\n\n")
-
-        for cmd in hu_commands:
-            f.write(f"$ {cmd}\n")
-            f.write(adb.shell(hu_serial, cmd))
-            f.write("\n\n")
-
-    print(f"[INFO] {hu_file.name}")
-
-    # ============================================================
-    # PHONE CONFIGURATION
-    # ============================================================
-
-    phone_commands = [
-        "getprop ro.product.manufacturer",
-        "getprop ro.product.model",
-        "getprop ro.build.version.release",
-        "getprop ro.build.version.sdk",
-        "getprop ro.build.fingerprint"
-    ]
-
-    phone_file = out / "phone_configuration.txt"
-
-    with open(phone_file, "w", encoding="utf-8") as f:
-        f.write("=== PHONE CONFIGURATION ===\n\n")
-
-        for cmd in phone_commands:
-            f.write(f"$ {cmd}\n")
-            f.write(adb.shell(phone_serial, cmd))
-            f.write("\n\n")
-
-    print(f"[INFO] {phone_file.name}")
-
-    # ============================================================
-    # ACTIVE USER
-    # ============================================================
-
-    current_user_file = out / "current_user.txt"
-
-    with open(current_user_file, "w", encoding="utf-8") as f:
-        f.write(adb.shell(hu_serial, "am get-current-user"))
-
-    print(f"[INFO] {current_user_file.name}")
-
-    # ============================================================
-    # USER LIST
-    # ============================================================
-
-    users_file = out / "users.txt"
-
-    with open(users_file, "w", encoding="utf-8") as f:
-        f.write(adb.shell(hu_serial, "pm list users"))
-
-    print(f"[INFO] {users_file.name}")
-
-    # ============================================================
-    # DUMPSYS USER
-    # ============================================================
-
-    dumpsys_users_file = out / "dumpsys_user.txt"
-
-    with open(dumpsys_users_file, "w", encoding="utf-8") as f:
-        f.write(adb.shell(hu_serial, "dumpsys user"))
-
-    print(f"[INFO] {dumpsys_users_file.name}")
-
-    # ============================================================
-    # DCSM
-    # ============================================================
-
-    dcsm_file = out / "dcsm.txt"
-
-    with open(dcsm_file, "w", encoding="utf-8") as f:
-        f.write(
-            adb.shell(
-                hu_serial,
-                "dumpsys activity services com.harman.DCSM"
-            )
+    hu_files = {
+        "current_user.txt": "am get-current-user",
+        "users.txt": "pm list users",
+        "dumpsys_user.txt": "dumpsys user",
+        "dcsm.txt": "dumpsys activity services com.harman.DCSM",
+    }
+    for filename, command in hu_files.items():
+        (out / filename).write_text(
+            adb.shell(hu_serial, command), encoding="utf-8"
         )
+        print(f"[INFO] {filename}")
 
-    print(f"[INFO] {dcsm_file.name}")
+    with (out / "test_start_time.txt").open("w", encoding="utf-8") as file:
+        file.write("=== HU DATE ===\n")
+        file.write(adb.shell(hu_serial, "date"))
+        file.write("\n\n=== HU EPOCH ===\n")
+        file.write(adb.shell(hu_serial, "date +%s"))
 
-    # ============================================================
-    # TIMESTAMP
-    # ============================================================
-
-    timestamp_file = out / "test_start_time.txt"
-
-    with open(timestamp_file, "w", encoding="utf-8") as f:
-
-        f.write("=== HU DATE ===\n")
-        f.write(adb.shell(hu_serial, "date"))
-
-        f.write("\n\n=== HU EPOCH ===\n")
-        f.write(adb.shell(hu_serial, "date +%s"))
-
-    print(f"[INFO] {timestamp_file.name}")
-
+    print("[INFO] test_start_time.txt")
     print("[INFO] Environment collection completed.")
